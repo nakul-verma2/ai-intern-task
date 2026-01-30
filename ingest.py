@@ -1,3 +1,7 @@
+#This file is used to setup Pipelines fro chroma db 
+#run this file after adding your desired PDF in the data folder
+#then we can run app.py to interact with the ingested PDF
+
 import os
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
@@ -17,7 +21,10 @@ def run_ingestion():
     loader = PyPDFLoader(pdf_path)
     documents = loader.load()
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=100)
+    text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500, 
+    chunk_overlap=150 
+)
     chunks = text_splitter.split_documents(documents)
 
 

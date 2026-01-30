@@ -1,3 +1,7 @@
+#this files countains the main logic for the RAG application 
+#it can be runned for testing purposes as well
+#you can change the desired question in the main function at the bottom
+
 import os
 from typing import TypedDict, List
 from dotenv import load_dotenv
@@ -22,7 +26,7 @@ vectorstore = Chroma(
     embedding_function=embeddings,
     collection_name="agentic_ai_collection"
 )
-retriever = vectorstore.as_retriever(search_kwargs={"k":3})
+retriever = vectorstore.as_retriever(search_kwargs={"k":5})
 
 llm = ChatOpenAI(
     model="deepseek/deepseek-r1-0528:free", 
@@ -33,35 +37,69 @@ llm = ChatOpenAI(
 
 
 def retrieve_node(state: AgentState):
-    """Fetches relevant segments from the vector database."""
-    docs = retriever.invoke(state["question"])
-    return {"context_chunks": [doc.page_content for doc in docs]}
-
-def generate_node(state: AgentState):
-    """Generates a strictly grounded answer."""
-    context_text = "\n\n".join(state["context_chunks"])
-    prompt = f"""
-    Answer the question using ONLY the provided Context. 
-    If the answer is missing, say: "Answer: I cannot find the answer in the provided PDF." and "Score: 0.0"
-    Do NOT provide external explanations, bullet points, or reasoning.
-
-    Context: {context_text}
-    Question: {state['question']}
+    """Broadens retrieval by searching for synonyms and related terms."""
+    print("--- NODE: RETRIEVING CONTEXT ---")
+    question = state["question"]
     
-    Format:
-    Answer: [Concise response]
-    Score: [0.0 to 1.0]
+
+    expansion_prompt = f"Provide 3 alternative search terms for: '{question}'. Output only the terms."
+    variations = llm.invoke(expansion_prompt).content.split("\n")
+    
+
+    search_queries = [question] + [v.strip() for v in variations if v.strip()]
+    
+    all_docs = []
+    for q in search_queries:
+        all_docs.extend(retriever.invoke(q))
+    
+    
+    unique_chunks = list(set([doc.page_content for doc in all_docs]))[:6]
+    
+    return {"context_chunks": unique_chunks}
+def generate_node(state: AgentState):
+    """Generates a detailed, strictly grounded answer with precise formatting."""
+    print("--- NODE: GENERATING DETAILED GROUNDED ANSWER ---")
+    context_text = "\n\n".join(state["context_chunks"])
+    
+    
+    prompt = f"""
+    You are a professional technical assistant. Answer the user's question using ONLY the provided Context.
+    
+    STRICT RULES:
+    1. Provide a COMPREHENSIVE and DETAILED answer based on the available information in the context. 
+    2. If the context contains a full explanation (e.g., regarding "Data Management Practices"), include all the key technical points.
+    3. If the Context does not contain the answer, say exactly: "Answer: I cannot find the answer in the provided PDF." and "Score: 0.0"
+    4. Do NOT explain why you cannot find the answer or use external knowledge.
+    5. The Score must be a clean numerical value between 0.0 and 1.0. Do NOT include extra symbols like asterisks, tags, or internal reasoning.
+
+    Context:
+    {context_text}
+    
+    Question: 
+    {state['question']}
+    
+    Required Output Format:
+    Answer: [Provide the full, detailed response here]
+    Score: [Numerical value only, e.g., 1.0]
     """
+    
     response = llm.invoke(prompt).content
     
+    
     try:
-        ans_part = response.split("Answer:")[1].split("Score:")[0].strip()
-        score_part = float(response.split("Score:")[1].strip())
-    except:
-        ans_part, score_part = response.strip(), 0.0
+        if "Answer:" in response and "Score:" in response:
+            ans_part = response.split("Answer:")[1].split("Score:")[0].strip()
+            score_text = response.split("Score:")[1].strip()
+            score_val = "".join(c for c in score_text if c.isdigit() or c == '.')
+            score_part = float(score_val)
+        else:
+            ans_part = response.strip()
+            score_part = 0.0
+    except Exception:
+        ans_part = response.strip()
+        score_part = 0.5
         
     return {"answer": ans_part, "confidence_score": score_part}
-
 
 workflow = StateGraph(AgentState)
 workflow.add_node("retrieve", retrieve_node)

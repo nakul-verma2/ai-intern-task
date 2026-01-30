@@ -1,0 +1,2 @@
+#Rename the file to .env after adding the API key you can get from https://openrouter.ai/
+OPENROUTER_API_KEY="<YOUR_API_KEY_HERE>"

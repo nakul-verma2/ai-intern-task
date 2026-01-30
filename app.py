@@ -1,3 +1,6 @@
+#This is the main file to run the streamlit app for RAG chatbot
+#run this file after running ingest.py if the chroma db is not setup yet
+
 import streamlit as st
 import os
 from agent import rag_app
