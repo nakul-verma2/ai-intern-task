@@ -19,6 +19,14 @@ The system follows a two-node pipeline:
 
 ## Setup Instructions
 
+### Install Dependencies
+
+Install the required Python packages:
+
+```bash
+pip install -r requirements.txt
+```
+
 ### Configure Environment
 
 1. Create a file named `.env` in the root directory.
